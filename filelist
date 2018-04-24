@@ -262,6 +262,8 @@ if counter != len(args):
 
             filesizes.append(filesize)
 
+            lastIndex = file.rfind("/")
+            filename = file[lastIndex + 1:]
 
 
             if delete == True and zipFile != "":
@@ -326,7 +328,7 @@ if counter != len(args):
             else:
                 beforeb = True
 
-            if biggerb and smallerb and afterb and beforeb and (match == "" or (match !="" and re.match(match,file))):
+            if biggerb and smallerb and afterb and beforeb and (match == "" or (match !="" and re.match(match,filename))):
                     includedFiles.append(filesize)
                     includedFilePaths.append(file)
                     if not nofilelist and not duplcont and not duplname:
@@ -349,12 +351,19 @@ if counter != len(args):
             os.remove(i)
 
     if zipFile:
-        dir = subprocess.check_output("mktemp -d", shell=True)
-        os.system("mkdir "+dir + "/"+ zipFile[:len(zipFile)-4])
+
+        pwd=commands.getoutput("pwd")
+        tempName = commands.getoutput("mktemp -d")
+        foldername = zipFile[:len(zipFile)-4]
+        commands.getoutput("mv " + tempName + " " + pwd)
+        commands.getoutput("mkdir "+tempName[5:]+"/"+ foldername)
         for i in includedFilePaths:
-            os.system("mv "+ i + " "+dir+"/" + zipFile[:len(zipFile)-4])
-        os.system("zip -r " + zipFile +" "+ dir + "/" +  zipFile[:len(zipFile)-4])
-        os.system("rm -r " + dir)
+            commands.getoutput("cp "+ "'" + i + "'" + " "+tempName[5:]+"/"+foldername)
+        os.chdir(pwd+tempName[4:])
+        commands.getoutput("zip -r " + zipFile +" "+ foldername)
+        commands.getoutput("mv " + zipFile +" "+pwd)
+        os.chdir(pwd)
+        commands.getoutput("rm -r " + tempName[5:])
 
     if stats:
         totalSize = 0
@@ -389,7 +398,8 @@ else: # current directory should be used here
         filesize, modtime, shasum, dateAndTime = getinfooffile(file)
 
         filesizes.append(filesize)
-
+        lastIndex = file.rfind("/")
+        filename = file[lastIndex+1:]
         if delete==True and zipFile != "":
            sys.exit("error: both delete and zip exist")
 
@@ -450,7 +460,7 @@ else: # current directory should be used here
         else:
             beforeb = True
 
-        if biggerb and smallerb and afterb and beforeb and (match == "" or (match !="" and re.match(match,file))):
+        if biggerb and smallerb and afterb and beforeb and (match == "" or (match !="" and re.match(match,filename))):
             includedFiles.append(filesize)
             includedFilePaths.append(file)
             if not nofilelist and not duplcont and not duplname:
@@ -466,12 +476,19 @@ else: # current directory should be used here
             os.remove(i)
 
     if zipFile:
-        dir = subprocess.check_output("mktemp -d", shell=True)
-        os.system("mkdir " + dir + "/" + zipFile[:len(zipFile) - 4])
+
+        pwd=commands.getoutput("pwd")
+        tempName = commands.getoutput("mktemp -d")
+        foldername = zipFile[:len(zipFile)-4]
+        commands.getoutput("mv " + tempName + " " + pwd)
+        commands.getoutput("mkdir "+tempName[5:]+"/"+ foldername)
         for i in includedFilePaths:
-            os.system("mv " + i + " " + dir + "/" + zipFile[:len(zipFile) - 4])
-        os.system("zip -r " + zipFile + " " + dir + "/" + zipFile[:len(zipFile) - 4])
-        os.system("rm -r " + dir)
+            commands.getoutput("cp "+ "'" + i + "'" + " "+tempName[5:]+"/"+foldername)
+        os.chdir(pwd+tempName[4:])
+        commands.getoutput("zip -r " + zipFile +" "+ foldername)
+        commands.getoutput("mv " + zipFile +" "+pwd)
+        os.chdir(pwd)
+        commands.getoutput("rm -r " + tempName[5:])
 
     if stats:
         totalSize = 0
@@ -490,4 +507,3 @@ else: # current directory should be used here
             currentStats.append("Total number of files with unique content: " + str(totalNumberUniqueFile))
             currentStats.append("Total size of files with unique content: " + str(totalSizeOfUniqueFiles))
         printstats(duplcont, duplname)
-
