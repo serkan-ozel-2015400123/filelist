@@ -1,0 +1,493 @@
+#!/usr/bin/python
+import sys
+import re
+import os
+import datetime
+import subprocess
+import commands
+from collections import deque
+import time
+
+
+
+currentStats = []
+
+totalNumberUniqueFile = 0
+totalNumberUniqueNamed = 0
+totalSizeOfUniqueFiles = 0
+
+def printDuplCont(files):
+    global totalSizeOfUniqueFiles
+    global totalNumberUniqueFile
+    dict = {}
+
+    for path in files:
+        command = "shasum " + '"' + path + '"'
+        shasumstr = subprocess.check_output(command, shell=True)
+        shasum = shasumstr[:40]
+        if not dict.get(shasum):
+            dict[shasum] = [path]
+        else:
+            dict[shasum].append(path)
+
+    for i in dict.keys():
+        for j in dict[i]:
+            print j
+        print "-------------------"
+
+    totalNumberUniqueFile = len(dict)
+
+    for i in dict.keys():
+        st = os.stat(dict[i][0])
+        filesize = st.st_size
+        totalSizeOfUniqueFiles += filesize
+
+def printDuplName(files):
+    global totalNumberUniqueNamed
+    dict = {}
+
+    for i in files:
+        last = i.rfind("/")
+        name = i[last+1:]
+        if not dict.get(name):
+            dict[name] = [i]
+        else:
+            dict[name].append(i)
+
+    for i in dict.keys():
+        for j in dict[i]:
+            print j
+        print "-------------------"
+    totalNumberUniqueNamed = len(dict)
+
+def printstats(duplcont,duplname):
+
+    if duplname and duplcont:
+        sys.exit("error: found that both duplcont and duplname is true while printing stats.")
+    else:
+        for i in currentStats:
+            print i
+
+
+
+def getinfooffile(path):
+    st = os.stat(path)
+
+    filesize = st.st_size
+    # print "File Size:{}".format(filesize)
+    modtime = st.st_mtime
+    # print "Modification Time:{}".format(modtime)
+    command = "shasum " +'"' + path + '"'
+    shasum = subprocess.check_output(command,shell=True)
+
+    dateAndTime = datetime.datetime.fromtimestamp(modtime).strftime('%Y%m%dT%H%M%S')
+
+    return filesize, modtime, shasum, dateAndTime
+
+
+def traversal(paths):
+
+    files = []
+
+    for i in paths:
+        qlist = deque([i])
+        while qlist:
+            currentdir = qlist.popleft()
+            dircontents = os.listdir(currentdir)
+            for name in dircontents:
+                currentitem = currentdir + "/" + name
+                if os.path.isdir(currentitem):
+                    qlist.append(currentitem)
+                else:
+                    files.append(currentitem)
+
+    return files
+
+bigger = ""
+smaller = ""
+after = ""
+before = ""
+match = ""
+zipFile = ""
+delete = False
+duplcont = False
+duplname = False
+stats = False
+nofilelist = False
+
+
+args = sys.argv
+
+args.pop(0) # To pop path/filelist argument
+
+counter = 0
+
+while counter < len(args):
+    if args[counter] in ['-bigger', '-smaller']:
+
+        if counter + 1 != len(args):
+
+            found = re.match("^\d*[MGK]?$", args[counter+1])
+
+            if found:
+                if args[counter] == '-bigger' and bigger == "":
+                    bigger = args[counter+1]
+                    counter += 2
+                elif args[counter] == '-smaller' and smaller == "":
+                    smaller = args[counter+1]
+                    counter += 2
+                else:
+                    sys.exit("error: multiple -bigger or -smaller options")
+            else:
+                sys.exit("error: not found good argument after -bigger or -smaller")
+        else:
+            sys.exit("error: not found any argument after -bigger or -smaller please use -bigger/smaller <digits>(optinal M or G or K) notation")
+
+    elif args[counter] in ['-after', '-before']:
+
+        if counter + 1 != len(args):
+
+            found = re.match("^\d{8}(T\d{6})?$", args[counter + 1])
+
+            if found:
+                if args[counter] == '-after' and after == "":
+                    after = args[counter + 1]
+                    counter += 2
+                elif args[counter] == '-before' and before == "":
+                    before = args[counter + 1]
+                    counter += 2
+                else:
+                    sys.exit("error: multiple -after or -before options")
+            else:
+                sys.exit("error: not found good argument after -after or -before")
+        else:
+            sys.exit("error: not found any argument after -after or -before please use -after/before YYYYMMDD or YYYYMMDDTHHMMSS notations.")
+
+    elif args[counter] == '-match':
+        if counter + 1 != len(args):
+
+            try:
+                re.compile(args[counter+1])
+                is_valid = True
+            except re.error:
+                is_valid = False
+
+            if is_valid:
+                if match == "":
+                    match = args[counter + 1]
+                    counter += 2
+                else:
+                    sys.exit("error: multiple -match options")
+            else:
+                sys.exit("error: not found good argument after -match option")
+        else:
+            sys.exit("error: not found any argument after -match option please use -match <validregex> notation.")
+    elif args[counter] == '-zip':
+
+        if counter + 1 != len(args):
+
+            found = re.match("^.*\.zip$",args[counter+1])
+            if found:
+                if zipFile == "":
+                    zipFile = args[counter + 1]
+                    counter += 2
+                else:
+                    sys.exit("error: multiple -zip options")
+            else:
+                sys.exit("error: not found good argument after -zip option please use -zip *.zip notation.")
+        else:
+            sys.exit("error: not found any argument after -zip option")
+
+    elif args[counter] == '-delete':
+        if not delete:
+            delete = True
+            counter += 1
+        else:
+            sys.exit("error: multiple -delete options")
+    elif args[counter] == '-duplcont':
+        if not duplcont:
+            duplcont = True
+            counter += 1
+        else:
+            sys.exit("error: multiple -duplcont options")
+    elif args[counter] == '-duplname':
+        if not duplname:
+            duplname = True
+            counter += 1
+        else:
+            sys.exit("error: multiple -duplname options")
+    elif args[counter] == '-stats':
+        if not stats:
+            stats = True
+            counter += 1
+        else:
+            sys.exit("error: multiple -stats options")
+    elif args[counter] == '-nofilelist':
+        if not nofilelist:
+            nofilelist = True
+            counter += 1
+        else:
+            sys.exit("error: multiple -nofilelist options")
+    else:
+        break # then we expect that the remaining arguments are all directory paths.
+
+""""""
+print 'bigger is ' + bigger
+print 'smaller is ' + smaller
+print 'before is ' + before
+print 'after is ' + after
+print 'match is ' + match
+print 'zip is ' + zipFile
+print 'delete is ' + str(delete)
+print 'duplcont is ' + str(duplcont)
+print 'duplname is ' + str(duplname)
+print 'stats is ' + str(stats)
+print 'nofilelist is ' + str(nofilelist)
+""""""
+if counter != len(args):
+    paths = []
+    while counter < len(args):
+        paths.append(args[counter])
+        counter += 1
+
+    filesizes = []
+
+    files = traversal(paths)
+    includedFiles = []
+    includedFilePaths = []
+
+    for file in files:
+        try:
+            filesize, modtime, shasum, dateAndTime = getinfooffile(file)
+
+            filesizes.append(filesize)
+
+
+
+            if delete == True and zipFile != "":
+                sys.exit("error: both delete and zip exist")
+
+            if delete == True and duplcont == True:
+                sys.exit("error: both delete and duplcont exist")
+
+            if delete == True and duplname == True:
+                sys.exit("error: both duplname and delete exist")
+
+            if duplcont == True and duplname == True:
+                sys.exit("error: both duplname and duplcont exist")
+            biggerb = None
+            smallerb = None
+            afterb = None
+            beforeb = None
+            if bigger != "":
+                if bigger[-1] == "M":
+                    biggerb = filesize >= int(bigger[:len(bigger) - 1]) * 1024 * 1024
+                elif bigger[-1] == "G":
+                    biggerb = filesize >= int(bigger[:len(bigger) - 1]) * 1024 * 1024 * 1024
+                elif bigger[-1] == "K":
+                    biggerb = filesize >= int(bigger[:len(bigger) - 1]) * 1024
+                else:
+                    biggerb = filesize >= int(bigger)
+            else:
+                biggerb = True
+            if smaller != "":
+                if smaller[-1] == "M":
+                    smallerb = filesize <= int(smaller[:len(smaller) - 1]) * 1024 * 1024
+                elif smaller[-1] == "G":
+                    smallerb = filesize <= int(smaller[:len(smaller) - 1]) * 1024 * 1024 * 1024
+                elif smaller[-1] == "K":
+                    smallerb = filesize <= int(smaller[:len(smaller) - 1]) * 1024
+                else:
+                    smallerb = filesize <= int(smaller)
+            else:
+                smallerb = True
+            if after != "":
+                if len(after) == 8:
+                    d = datetime.datetime(int(after[0:4]), int(after[4:6]), int(after[6:]))
+                    unixtime = time.mktime(d.timetuple())
+                    afterb = modtime >= unixtime
+                else:
+                    d = datetime.datetime(int(after[0:4]), int(after[4:6]), int(after[6:8]), int(after[9:11]),
+                                          int(after[11:13]), int(after[13:]))
+                    unixtime = time.mktime(d.timetuple())
+                    afterb = modtime >= unixtime
+            else:
+                afterb = True
+            if before != "":
+                if len(before) == 8:
+                    d = datetime.datetime(int(before[0:4]), int(before[4:6]), int(before[6:]))
+                    unixtime = time.mktime(d.timetuple())
+                    beforeb = modtime <= unixtime
+                else:
+                    d = datetime.datetime(int(before[0:4]), int(before[4:6]), int(before[6:8]), int(before[9:11]),
+                                          int(before[11:13]), int(before[13:]))
+                    unixtime = time.mktime(d.timetuple())
+                    beforeb = modtime <= unixtime
+            else:
+                beforeb = True
+
+            if biggerb and smallerb and afterb and beforeb and (match == "" or (match !="" and re.match(match,file))):
+                    includedFiles.append(filesize)
+                    includedFilePaths.append(file)
+                    if not nofilelist and not duplcont and not duplname:
+                        print file
+
+
+        except OSError:
+            print "error: couldn't open file \"" + file + "\""
+        except BaseException as e:
+            print e.__doc__
+            print e.message
+
+    if not nofilelist and duplcont:
+        printDuplCont(includedFilePaths)
+    elif not nofilelist and duplname:
+        printDuplName(includedFilePaths)
+
+    if delete:
+        for i in includedFilePaths:
+            os.remove(i)
+
+    if zipFile:
+        dir = subprocess.check_output("mktemp -d", shell=True)
+        os.system("mkdir "+dir + "/"+ zipFile[:len(zipFile)-4])
+        for i in includedFilePaths:
+            os.system("mv "+ i + " "+dir+"/" + zipFile[:len(zipFile)-4])
+        os.system("zip -r " + zipFile +" "+ dir + "/" +  zipFile[:len(zipFile)-4])
+        os.system("rm -r " + dir)
+
+    if stats:
+        totalSize = 0
+        for i in filesizes:
+            totalSize += i
+        currentStats.append("Total number of files visited: " + str(len(filesizes)))
+        currentStats.append("Total size of the files visited in bytes:" + str(totalSize))
+        totalSizeOfIncluded = 0
+        for i in includedFiles:
+            totalSizeOfIncluded += i
+        currentStats.append("Total number of included files " +  str(len(includedFiles)))
+        currentStats.append("Total size of the files included " + str(totalSizeOfIncluded))
+        if duplname:
+            currentStats.append("Total number of files with unique names: " + str(totalNumberUniqueNamed))
+        elif duplcont:
+            currentStats.append("Total number of files with unique content: " + str(totalNumberUniqueFile))
+            currentStats.append("Total size of files with unique content: " + str(totalSizeOfUniqueFiles))
+        printstats(duplcont, duplname)
+
+else: # current directory should be used here
+
+    filesizes = []
+
+    includedFiles = []
+    includedFilePaths = []
+
+    status, out = commands.getstatusoutput("pwd")
+    outArray = [out]
+    files = traversal(outArray)
+
+    for file in files:
+        filesize, modtime, shasum, dateAndTime = getinfooffile(file)
+
+        filesizes.append(filesize)
+
+        if delete==True and zipFile != "":
+           sys.exit("error: both delete and zip exist")
+
+        if delete==True and duplcont==True:
+            sys.exit("error: both delete and duplcont exist")
+
+        if delete==True and duplname==True:
+            sys.exit("error: both duplname and delete exist")
+
+        if duplcont==True and duplname==True:
+            sys.exit("error: both duplname and duplcont exist")
+        biggerb = None
+        smallerb = None
+        afterb = None
+        beforeb = None
+        if bigger != "":
+            if bigger[-1]=="M":
+                biggerb = filesize >= int(bigger[:len(bigger)-1]) * 1024 * 1024
+            elif bigger[-1] == "G":
+                biggerb = filesize >= int(bigger[:len(bigger) - 1]) * 1024 * 1024 * 1024
+            elif bigger[-1] == "K":
+                biggerb = filesize >= int(bigger[:len(bigger) - 1]) * 1024
+            else:
+                biggerb = filesize >= int(bigger)
+        else:
+            biggerb = True
+        if smaller != "":
+            if smaller[-1] == "M":
+                smallerb = filesize <= int(smaller[:len(smaller) - 1]) * 1024 * 1024
+            elif smaller[-1] == "G":
+                smallerb = filesize <= int(smaller[:len(smaller) - 1]) * 1024 * 1024 * 1024
+            elif smaller[-1] == "K":
+                smallerb = filesize <= int(smaller[:len(smaller) - 1]) * 1024
+            else:
+                smallerb = filesize <= int(smaller)
+        else:
+            smallerb = True
+        if after != "":
+            if len(after)==8:
+                d = datetime.datetime(int(after[0:4]),int(after[4:6]),int(after[6:]))
+                unixtime = time.mktime(d.timetuple())
+                afterb = modtime >= unixtime
+            else:
+                d = datetime.datetime(int(after[0:4]), int(after[4:6]), int(after[6:8]),int(after[9:11]),int(after[11:13]),int(after[13:]))
+                unixtime = time.mktime(d.timetuple())
+                afterb = modtime >= unixtime
+        else:
+            afterb = True
+        if before != "":
+            if len(before)==8:
+                d = datetime.datetime(int(before[0:4]),int(before[4:6]),int(before[6:]))
+                unixtime = time.mktime(d.timetuple())
+                beforeb = modtime <= unixtime
+            else:
+                d = datetime.datetime(int(before[0:4]), int(before[4:6]), int(before[6:8]),int(before[9:11]),int(before[11:13]),int(before[13:]))
+                unixtime = time.mktime(d.timetuple())
+                beforeb = modtime <= unixtime
+        else:
+            beforeb = True
+
+        if biggerb and smallerb and afterb and beforeb and (match == "" or (match !="" and re.match(match,file))):
+            includedFiles.append(filesize)
+            includedFilePaths.append(file)
+            if not nofilelist and not duplcont and not duplname:
+                print file
+
+    if not nofilelist and duplcont:
+        printDuplCont(includedFilePaths)
+    elif not nofilelist and duplname:
+        printDuplName(includedFilePaths)
+
+    if delete:
+        for i in includedFilePaths:
+            os.remove(i)
+
+    if zipFile:
+        dir = subprocess.check_output("mktemp -d", shell=True)
+        os.system("mkdir " + dir + "/" + zipFile[:len(zipFile) - 4])
+        for i in includedFilePaths:
+            os.system("mv " + i + " " + dir + "/" + zipFile[:len(zipFile) - 4])
+        os.system("zip -r " + zipFile + " " + dir + "/" + zipFile[:len(zipFile) - 4])
+        os.system("rm -r " + dir)
+
+    if stats:
+        totalSize = 0
+        for i in filesizes:
+            totalSize += i
+        currentStats.append("Total number of files visited: " + str(len(filesizes)))
+        currentStats.append("Total size of the files visited in bytes:" + str(totalSize))
+        totalSizeOfIncluded = 0
+        for i in includedFiles:
+            totalSizeOfIncluded += i
+        currentStats.append("Total number of included files " +  str(len(includedFiles)))
+        currentStats.append("Total size of the files included " + str(totalSizeOfIncluded))
+        if duplname:
+            currentStats.append("Total number of files with unique names: " + str(totalNumberUniqueNamed))
+        elif duplcont:
+            currentStats.append("Total number of files with unique content: " + str(totalNumberUniqueFile))
+            currentStats.append("Total size of files with unique content: " + str(totalSizeOfUniqueFiles))
+        printstats(duplcont, duplname)
+
