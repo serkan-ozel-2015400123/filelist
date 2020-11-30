@@ -240,6 +240,34 @@ def traversal(paths):
     return files
 
 args = sys.argv # arguments
+
+if args[1] == "-h" or args[1] == "--help":
+    print("""
+  FILELIST, Serkan Ozel
+
+  Usage: ./filelist.py options directory 
+
+\t-after, files created after a time
+\t-before, files created before a time
+\t\tformat of time YYYYMMDD or YYYYMMDDTHHMMSS
+\t-bigger, files bigger than a size, append M to a number for megabytes, G for gigabytes and K for kilobytes
+\t-match, match files according to a regex 
+\t-zip, zip found files
+\t-delete, delete found files
+\t-stats, show stats
+\t\tTotal number of files visited
+\t\tTotal size of the files visited in bytes
+\t\tTotal number of included files
+\t\tTotal size of the files included
+\t\tif duplname is set, Total number of files with unique names
+\t\tif duplcont is set, Total number of files with unique content
+\t\tif duplcont is set, Total size of files with unique content
+\t-nofilelist, do not list files
+\t-duplname, Print files with same name. 
+\t-duplcont, Group files with same content. Groups are seperated by ------- lines
+    """)
+    exit()
+
 args.pop(0) # To pop name of the executable
 counter = 0
 
